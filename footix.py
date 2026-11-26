@@ -118,21 +118,27 @@ class JoueurFM:
         infos.append("Actus Foot : " + " / ".join(titres))
     except Exception:
       pass
-    if self.info_mentor:
+      if self.info_mentor:
       try:
-        requete = urllib.parse.quote(self.info_mentor + " football")
+        mots_cles = " ".join(
+            [m for m in self.info_mentor.split() if len(m) > 3][:4]
+        )
+        requete = urllib.parse.quote(mots_cles + " football")
         url_verif = "".join([
             "https://news.google",
             f".com/rss/search?q={requete}&hl=fr&gl=FR&ceid=FR:fr",
         ])
         rss_verif = requests.get(url_verif, timeout=6).text
-        titres_verif = re.findall(r"<title>(.*?)</title>", rss_verif)[1:5]
+        titres_verif = re.findall(r"<title>(.*?)</title>", rss_verif)[1:6]
         if titres_verif:
           infos.append(
-              "VÉRIFICATION SUR L'INFO DU COACH : " + " / ".join(titres_verif)
+              "PREUVES WEB EN DIRECT SUR L'INFO DU COACH : "
+              + " / ".join(titres_verif)
           )
       except Exception:
         pass
+        
+    
         
     if FOOTBALL_API_KEY:
       try:
@@ -163,11 +169,12 @@ class JoueurFM:
     contexte_reel = self.lire_actualite_foot()
     bloc_coach = (
         f"CONSEIL OU INFO DU COACH À ÉVALUER (INFO OU INTOX ?) : « {self.info_mentor} ». "
-        "Confronte ce message avec les ACTUS FOOT et SCORES RÉELS ! "
-        "Attention : ton Coach te teste parfois avec de fausses infos (intox) pour vérifier si tu suis vraiment les matchs !"
+        "RÈGLE ABSOLUE : Ne te fie JAMAIS à tes vieux souvenirs pour les transferts ou résultats ! "
+        "Base-toi UNIQUEMENT sur les PREUVES WEB EN DIRECT ci-dessus : si les titres d'actualité confirment les mots du Coach (même un transfert récent), mets 'info_vraie' !"
         if self.info_mentor
         else "Aucun nouveau message du Coach."
-    )
+        )
+    
 
     prompt = (
         f"Tu es {self.nom}, jeune espoir de {self.age} ans ({self.categorie}) au poste de {self.poste}. "
