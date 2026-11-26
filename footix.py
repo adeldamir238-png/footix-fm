@@ -118,7 +118,22 @@ class JoueurFM:
         infos.append("Actus Foot : " + " / ".join(titres))
     except Exception:
       pass
-
+    if self.info_mentor:
+      try:
+        requete = urllib.parse.quote(self.info_mentor + " football")
+        url_verif = "".join([
+            "https://news.google",
+            f".com/rss/search?q={requete}&hl=fr&gl=FR&ceid=FR:fr",
+        ])
+        rss_verif = requests.get(url_verif, timeout=6).text
+        titres_verif = re.findall(r"<title>(.*?)</title>", rss_verif)[1:5]
+        if titres_verif:
+          infos.append(
+              "VÉRIFICATION SUR L'INFO DU COACH : " + " / ".join(titres_verif)
+          )
+      except Exception:
+        pass
+        
     if FOOTBALL_API_KEY:
       try:
         headers = {"x-apisports-key": FOOTBALL_API_KEY}
