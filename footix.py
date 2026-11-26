@@ -269,7 +269,7 @@ def gerer_cote_et_match(self):
         except Exception:
           pass
 def cycle_evolution(self):
-      self.gerer_cote_et_match()
+   self.gerer_cote_et_match()
   
           
    if not GEMINI_API_KEY:
