@@ -118,7 +118,7 @@ class JoueurFM:
         infos.append("Actus Foot : " + " / ".join(titres))
     except Exception:
       pass
-      if self.info_mentor:
+    if self.info_mentor:
       try:
         mots_cles = " ".join(
             [m for m in self.info_mentor.split() if len(m) > 3][:4]
@@ -133,6 +133,11 @@ class JoueurFM:
         if titres_verif:
           infos.append(
               "PREUVES WEB EN DIRECT SUR L'INFO DU COACH : "
+              + " / ".join(titres_verif)
+          )
+      except Exception:
+        pass
+        
               + " / ".join(titres_verif)
           )
       except Exception:
