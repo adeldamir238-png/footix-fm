@@ -1,6 +1,8 @@
 import json, os, re, threading, time
+import urllib.parse
 from flask import Flask, redirect, request
 import requests
+
 
 app = Flask(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
