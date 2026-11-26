@@ -307,7 +307,7 @@ def cycle_evolution(self):
         "generationConfig": {"responseMimeType": "application/json"},
     }
 
-    for mod in modeles_ia:
+   for mod in modeles_ia:
       url = "".join([
           "https://generativelanguage.googleapis",
           f".com/v1beta/models/{mod}:generateContent?key=",
