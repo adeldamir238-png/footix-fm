@@ -276,7 +276,7 @@ def cycle_evolution(self):
       self.pensee = "Clé GEMINI_API_KEY manquante."
       return
 
-    contexte_reel = self.lire_actualite_foot()
+   contexte_reel = self.lire_actualite_foot()
     bloc_coach = (
         f"CONSEIL OU INFO DU COACH À ÉVALUER (INFO OU INTOX ?) : « {self.info_mentor} ». "
         "RÈGLE ABSOLUE : Base-toi UNIQUEMENT sur les PREUVES WEB ci-dessus pour juger si l'info du Coach est vraie ou fausse !"
