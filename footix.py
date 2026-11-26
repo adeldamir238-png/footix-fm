@@ -260,6 +260,80 @@ class JoueurFM:
 
 
 joueur = JoueurFM()
+def boucle_centre_formation():
+  while True:
+    joueur.cycle_evolution()
+    time.sleep(600)
+
+
+@app.route("/ping")
+def ping():
+  return "OK", 200
+
+
+@app.route("/coach", methods=["POST"])
+def action_coach():
+  msg = request.form.get("info_mentor", "").strip()
+  atelier = request.form.get("atelier", "").strip()
+  if atelier:
+    joueur.atelier = atelier
+    joueur.dernier_evenement = f"📋 Nouveau programme : {atelier}"
+  if msg:
+    joueur.info_mentor = msg[:250]
+    joueur.reponse_mentor = f"⏳ Analyse vidéo en cours : « {msg[:50]}... »"
+    threading.Thread(target=joueur.cycle_evolution, daemon=True).start()
+  joueur.sauvegarder()
+  return redirect("/")
+
+
+@app.route("/")
+def accueil():
+  c_cond = (
+      "#22c55e"
+      if joueur.condition >= 70
+      else ("#f59e0b" if joueur.condition >= 45 else "#ef4444")
+  )
+  return f"""<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="60"><title>Footix Academy FM</title></head>
+  <body style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:18px; max-width:500px; margin:auto;">
+    <div style="background:#1e293b; border-left:4px solid #10b981; padding:12px; border-radius:6px; margin-bottom:14px;">
+      <h2 style="margin:0;">⚽ {joueur.nom} ({joueur.age} ans)</h2>
+      <p style="margin:4px 0; color:#34d399;"><b>{joueur.poste}</b> • {joueur.categorie}</p>
+      <p style="margin:4px 0;">⭐ Niveau Global : <b>{joueur.note_globale()}/20</b> (XP: {joueur.xp}/100)</p>
+    </div>
+    <div style="background:#1e293b; padding:12px; border-radius:8px; margin-bottom:14px;">
+      <p style="margin:0 0 8px 0; color:#94a3b8;">📊 ATTRIBUTS FOOTBALL MANAGER (/20)</p>
+      <p style="margin:4px 0;">🎯 <b>Technique :</b> {joueur.technique:.2f} / 20</p>
+      <p style="margin:4px 0;">🧠 <b>Mental :</b> {joueur.mental:.2f} / 20</p>
+      <p style="margin:4px 0;">⚡ <b>Physique :</b> {joueur.physique:.2f} / 20</p>
+      <p style="margin:4px 0;">🔋 Condition : <b style="color:{c_cond};">{joueur.condition}%</b> | 😊 Moral : <b>{joueur.moral}</b></p>
+      <p style="margin:4px 0;">🕵️ Esprit Critique : <b>{joueur.esprit_critique}</b> | Modèles : {', '.join(joueur.modeles)}</p>
+    </div>
+    <p>💬 <b>Pensée du joueur :</b> « {joueur.pensee} »</p>
+    <p>📌 <b>Dernier fait :</b> {joueur.dernier_evenement}</p>
+    <div style="background:#1e293b; border:1px solid #0284c7; padding:12px; margin-top:14px; border-radius:8px;">
+      <p style="margin:0 0 6px 0; color:#38bdf8; font-weight:bold;">👔 BUREAU DU COACH (INFO OU INTOX)</p>
+      <p style="margin:0 0 10px 0; font-size:0.9em; background:#0f172a; padding:8px; border-radius:4px;">🗣️ <b>{joueur.nom} :</b> « {joueur.reponse_mentor} »</p>
+      <form action="/coach" method="POST" style="display:flex; flex-direction:column; gap:8px;">
+        <select name="atelier" style="padding:8px; border-radius:4px; background:#0f172a; color:#fff; border:1px solid #475569;">
+          <option value="{joueur.atelier}">Atelier actuel : {joueur.atelier}</option>
+          <option value="Toros & Vision du jeu">🎯 Toros & Vision du jeu</option>
+          <option value="Finition & Coups de pied arrêtés">⚽ Finition & Frappes</option>
+          <option value="Préparation Athlétique & Vitesse">⚡ Préparation Athlétique</option>
+          <option value="Repos & Soins">💆 Repos & Soins (Récupération)</option>
+        </select>
+        <div style="display:flex; gap:6px;">
+          <input type="text" name="info_mentor" placeholder="Glisse une info match ou une intox..." style="flex:1; padding:8px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#fff;">
+          <button type="submit" style="padding:8px 12px; background:#10b981; color:#0f172a; border:none; border-radius:4px; font-weight:bold;">Valider</button>
+        </div>
+      </form>
+    </div>
+  </body></html>"""
+
+
+if __name__ == "__main__":
+  threading.Thread(target=boucle_centre_formation, daemon=True).start()
+  app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+  
 
 
 
