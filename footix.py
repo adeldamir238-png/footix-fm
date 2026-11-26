@@ -72,10 +72,10 @@ class JoueurFM:
         if e.get("equipe_5"):
           self.equipe_5 = e["equipe_5"]
         if e.get("bilan_equipe"):
-        if e.get("predictions_json"):
-       self.predictions = json.loads(e["predictions_json"])
-                 
           self.bilan_equipe = e["bilan_equipe"]
+        if e.get("predictions_json"):
+          self.predictions = json.loads(e["predictions_json"])
+          
     except Exception:
       pass
 
