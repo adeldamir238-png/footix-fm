@@ -130,18 +130,13 @@ class JoueurFM:
         ])
         rss_verif = requests.get(url_verif, timeout=6).text
         titres_verif = re.findall(r"<title>(.*?)</title>", rss_verif)[1:6]
+
+        
         if titres_verif:
-          infos.append(
-              "PREUVES WEB EN DIRECT SUR L'INFO DU COACH : "
-              + " / ".join(titres_verif)
-          )
+          infos.append("PREUVES WEB : " + " / ".join(titres_verif))
       except Exception:
         pass
         
-              + " / ".join(titres_verif)
-          )
-      except Exception:
-        pass
         
     
         
