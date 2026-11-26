@@ -277,7 +277,7 @@ def cycle_evolution(self):
       return
 
    contexte_reel = self.lire_actualite_foot()
-    bloc_coach = (
+   bloc_coach = (
         f"CONSEIL OU INFO DU COACH À ÉVALUER (INFO OU INTOX ?) : « {self.info_mentor} ». "
         "RÈGLE ABSOLUE : Base-toi UNIQUEMENT sur les PREUVES WEB ci-dessus pour juger si l'info du Coach est vraie ou fausse !"
         if self.info_mentor
