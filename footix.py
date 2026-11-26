@@ -469,9 +469,16 @@ def action_coach():
   return redirect("/")
 @app.route("/grille", methods=["POST"])
 def actualiser_grille():
-  joueur.gerer_cote_et_match()
-  joueur.sauvegarder()
+  try:
+    if hasattr(joueur, "gerer_cote_et_match"):
+      joueur.gerer_cote_et_match()
+    else:
+      gerer_cote_et_match(joueur)
+    joueur.sauvegarder()
+  except Exception as e:
+    joueur.pensee = f"Grille : {type(e).__name__}"
   return redirect("/")
+  
   
 
 
