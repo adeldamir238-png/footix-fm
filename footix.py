@@ -301,7 +301,7 @@ def cycle_evolution(self):
         "et 'reponse_coach' (ta réponse naturelle à ton entraîneur)."
     )
 
-  modeles_ia = ["gemini-3.5-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
+   modeles_ia = ["gemini-3.5-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json"},
