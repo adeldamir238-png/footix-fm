@@ -31,6 +31,7 @@ class JoueurFM:
     self.reponse_mentor = "En attente de tes conseils ou analyses, Coach !"
     self.equipe_5 = "Donnarumma, Zabarnyi, Vitinha, Zaïre-Emery, Dembélé"
     self.bilan_equipe = "En attente de l'analyse de tes 5 joueurs modèles..."
+    self.predictions = []
     self.charger()
 
   def note_globale(self):
@@ -71,6 +72,9 @@ class JoueurFM:
         if e.get("equipe_5"):
           self.equipe_5 = e["equipe_5"]
         if e.get("bilan_equipe"):
+        if e.get("predictions_json"):
+       self.predictions = json.loads(e["predictions_json"])
+                 
           self.bilan_equipe = e["bilan_equipe"]
     except Exception:
       pass
@@ -165,9 +169,110 @@ class JoueurFM:
       except Exception:
         pass
     return " | ".join(infos) if infos else "Semaine d'entraînement classique."
-
-  def cycle_evolution(self):
+def gerer_cote_et_match(self):
     if not GEMINI_API_KEY:
+      return
+    en_cours = [p for p in self.predictions if p.get("statut") == "⏳ En cours"]
+    if len(en_cours) < 3 and FOOTBALL_API_KEY:
+      try:
+        headers = {"x-apisports-key": FOOTBALL_API_KEY}
+        r = requests.get(
+            "https://api-sports.io",
+            headers=headers,
+            timeout=8,
+        ).json()
+        deja = [p["match"] for p in self.predictions]
+        nouveaux = []
+        for m in r.get("response", []):
+          affiche = f"{m['teams']['home']['name']} - {m['teams']['away']['name']}"
+          if affiche not in deja:
+            nouveaux.append(affiche)
+        if nouveaux:
+          prompt_cotes = (
+              f"Voici des matchs de Ligue 1 à venir : {', '.join(nouveaux)}. "
+              "Pour chaque match, donne des cotes réalistes (c1, cN, c2) et le choix tactique de Léo ('1', 'N' ou '2'). "
+              "Réponds en JSON liste : [{'match': '...', 'c1': 1.85, 'cN': 3.40, 'c2': 4.10, 'choix': '1'}]"
+          )
+          url_g = "".join([
+              "https://generativelanguage.googleapis",
+              ".com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=",
+              GEMINI_API_KEY,
+          ])
+          resp = requests.post(
+              url_g,
+              json={
+                  "contents": [{"parts": [{"text": prompt_cotes}]}],
+                  "generationConfig": {"responseMimeType": "application/json"},
+              },
+              timeout=12,
+          ).json()
+          cand = next(iter(resp["candidates"]))
+          part = next(iter(cand["content"]["parts"]))
+          grille = json.loads(part["text"])
+          for item in grille[:3]:
+            c_choisie = item.get(f"c{item.get('choix', '1')}", 2.0)
+            self.predictions.append({
+                "match": item["match"],
+                "c1": item.get("c1", 2.0),
+                "cN": item.get("cN", 3.2),
+                "c2": item.get("c2", 3.5),
+                "choix": item.get("choix", "1"),
+                "cote_jouee": c_choisie,
+                "statut": "⏳ En cours",
+            })
+      except Exception:
+        pass
+
+    for p in self.predictions:
+      if p.get("statut") == "⏳ En cours":
+        try:
+          q = urllib.parse.quote(f"{p['match']} score résultat ligue 1")
+          url_s = "".join([
+              "https://news.google",
+              f".com/rss/search?q={q}&hl=fr&gl=FR&ceid=FR:fr",
+          ])
+          rss = requests.get(url_s, timeout=6).text
+          titres = re.findall(r"<title>(.*?)</title>", rss)[1:5]
+          if not titres:
+            continue
+          prompt_v = (
+              f"Match : {p['match']}. Choix fait : {p['choix']}. "
+              f"Actus : {' / '.join(titres)}. "
+              "Si le match est terminé avec un score officiel, réponds en JSON : "
+              "{'termine': true, 'score': '2-1', 'gagne': true/false}. Sinon {'termine': false}."
+          )
+          url_g = "".join([
+              "https://generativelanguage.googleapis",
+              ".com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=",
+              GEMINI_API_KEY,
+          ])
+          r = requests.post(
+              url_g,
+              json={
+                  "contents": [{"parts": [{"text": prompt_v}]}],
+                  "generationConfig": {"responseMimeType": "application/json"},
+              },
+              timeout=10,
+          ).json()
+          cand = next(iter(r["candidates"]))
+          part = next(iter(cand["content"]["parts"]))
+          res = json.loads(part["text"])
+          if res.get("termine"):
+            gain_xp = int(round(10 * float(p.get("cote_jouee", 2.0))))
+            if res.get("gagne"):
+              p["statut"] = f"✅ {res.get('score')} (+{gain_xp} XP)"
+              self.xp += gain_xp
+              self.mental = min(20.0, self.mental + 0.1)
+            else:
+              p["statut"] = f"❌ {res.get('score')} (-10 XP)"
+              self.xp = max(0, self.xp - 10)
+        except Exception:
+          pass
+def cycle_evolution(self):
+      self.gerer_cote_et_match()
+  
+          
+   if not GEMINI_API_KEY:
       self.pensee = "Clé GEMINI_API_KEY manquante."
       return
 
@@ -360,10 +465,27 @@ def action_coach():
     threading.Thread(target=joueur.cycle_evolution, daemon=True).start()
   joueur.sauvegarder()
   return redirect("/")
+@app.route("/grille", methods=["POST"])
+def actualiser_grille():
+  joueur.gerer_cote_et_match()
+  joueur.sauvegarder()
+  return redirect("/")
+  
 
 
 @app.route("/")
 def accueil():
+  lignes_cm = (
+         "".join([
+             f"<tr><td style='padding:5px; border-bottom:1px solid #334155;'>{p['match']}</td>"
+             f"<td style='padding:4px; text-align:center; border-bottom:1px solid #334155; {'background:#065f46; color:#34d399; font-weight:bold;' if p.get('choix')=='1' else ''}'>{p.get('c1', '-')}</td>"
+             f"<td style='padding:4px; text-align:center; border-bottom:1px solid #334155; {'background:#065f46; color:#34d399; font-weight:bold;' if p.get('choix')=='N' else ''}'>{p.get('cN', '-')}</td>"
+             f"<td style='padding:4px; text-align:center; border-bottom:1px solid #334155; {'background:#065f46; color:#34d399; font-weight:bold;' if p.get('choix')=='2' else ''}'>{p.get('c2', '-')}</td>"
+             f"<td style='padding:5px; border-bottom:1px solid #334155; font-size:0.85em;'>{p.get('statut', '')}</td></tr>"
+             for p in joueur.predictions[-4:]
+         ])
+         or "<tr><td colspan='5' style='padding:6px; color:#94a3b8;'>Clique sur Actualiser pour charger la grille L1.</td></tr>"
+     )
   from itertools import islice
 
   c_cond = (
@@ -432,6 +554,26 @@ def accueil():
         </div>
       </form>
     </div>
+        <div style="background:#1e293b; border:1px solid #a855f7; padding:12px; margin-top:14px; border-radius:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="color:#c084fc; font-weight:bold;">🎫 GRILLE COTE & MATCH (XP = 10 × Cote)</span>
+        <form action="/grille" method="POST" style="margin:0;">
+          <button type="submit" style="padding:4px 8px; background:#a855f7; color:#fff; border:none; border-radius:4px; font-size:0.8em; font-weight:bold;">🔄 Actualiser</button>
+        </form>
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.8em; text-align:left;">
+        <tr style="color:#94a3b8; border-bottom:1px solid #475569;">
+          <th style="padding:4px;">Match</th>
+          <th style="padding:4px; text-align:center;">1</th>
+          <th style="padding:4px; text-align:center;">N</th>
+          <th style="padding:4px; text-align:center;">2</th>
+          <th style="padding:4px;">Résultat</th>
+        </tr>
+        {lignes_cm}
+      </table>
+      <p style="margin:6px 0 0 0; font-size:0.75em; color:#94a3b8;">🟩 Case verte = Pronostic verrouillé par Léo Mercier</p>
+    </div>
+    
   </body></html>"""
 
 
