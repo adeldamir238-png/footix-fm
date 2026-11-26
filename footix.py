@@ -3,7 +3,6 @@ import urllib.parse
 from flask import Flask, redirect, request
 import requests
 
-
 app = Flask(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
@@ -30,7 +29,8 @@ class JoueurFM:
     self.dernier_evenement = "Entrée au centre de formation."
     self.info_mentor = ""
     self.reponse_mentor = "En attente de tes conseils ou analyses, Coach !"
-    self.modeles = ["Vitinha", "Warren Zaïre-Emery", "Pedri"]
+    self.equipe_5 = "Donnarumma, Zabarnyi, Vitinha, Zaïre-Emery, Dembélé"
+    self.bilan_equipe = "En attente de l'analyse de tes 5 joueurs modèles..."
     self.charger()
 
   def note_globale(self):
@@ -68,6 +68,10 @@ class JoueurFM:
         )
         if e.get("reponse_mentor"):
           self.reponse_mentor = e["reponse_mentor"]
+        if e.get("equipe_5"):
+          self.equipe_5 = e["equipe_5"]
+        if e.get("bilan_equipe"):
+          self.bilan_equipe = e["bilan_equipe"]
     except Exception:
       pass
 
@@ -100,6 +104,8 @@ class JoueurFM:
           "dernier_evenement": self.dernier_evenement,
           "info_mentor": self.info_mentor,
           "reponse_mentor": self.reponse_mentor,
+          "equipe_5": self.equipe_5,
+          "bilan_equipe": self.bilan_equipe,
       }
       requests.post(url, headers=headers, json=payload, timeout=10)
     except Exception:
@@ -107,17 +113,23 @@ class JoueurFM:
 
   def lire_actualite_foot(self):
     infos = []
-    try:
-      url_rss = "".join([
-          "https://news.google",
-          ".com/rss/search?q=ligue+1+champions+league+football&hl=fr&gl=FR&ceid=FR:fr",
-      ])
-      rss = requests.get(url_rss, timeout=6).text
-      titres = re.findall(r"<title>(.*?)</title>", rss)[1:5]
-      if titres:
-        infos.append("Actus Foot : " + " / ".join(titres))
-    except Exception:
-      pass
+    # 1. Recherche des performances récentes des 5 joueurs choisis (façon Sorare)
+    joueurs_liste = [j.strip() for j in self.equipe_5.split(",") if j.strip()][:5]
+    for j in joueurs_liste:
+      try:
+        q = urllib.parse.quote(f"{j} note match performance football")
+        url_j = "".join([
+            "https://news.google",
+            f".com/rss/search?q={q}&hl=fr&gl=FR&ceid=FR:fr",
+        ])
+        rss_j = requests.get(url_j, timeout=5).text
+        titres_j = re.findall(r"<title>(.*?)</title>", rss_j)[1:3]
+        if titres_j:
+          infos.append(f"Actu {j} : " + " / ".join(titres_j))
+      except Exception:
+        pass
+
+    # 2. Vérification de l'info ou intox du Coach
     if self.info_mentor:
       try:
         mots_cles = " ".join(
@@ -130,16 +142,12 @@ class JoueurFM:
         ])
         rss_verif = requests.get(url_verif, timeout=6).text
         titres_verif = re.findall(r"<title>(.*?)</title>", rss_verif)[1:6]
-
-        
         if titres_verif:
           infos.append("PREUVES WEB : " + " / ".join(titres_verif))
       except Exception:
         pass
-        
-        
-    
-        
+
+    # 3. Scores récents via API-Football
     if FOOTBALL_API_KEY:
       try:
         headers = {"x-apisports-key": FOOTBALL_API_KEY}
@@ -148,13 +156,10 @@ class JoueurFM:
             headers=headers,
             timeout=8,
         ).json()
-        matchs = []
-        for m in r.get("response", [])[:3]:
-          eq1 = m["teams"]["home"]["name"]
-          eq2 = m["teams"]["away"]["name"]
-          g1 = m["goals"]["home"]
-          g2 = m["goals"]["away"]
-          matchs.append(f"{eq1} {g1}-{g2} {eq2}")
+        matchs = [
+            f"{m['teams']['home']['name']} {m['goals']['home']}-{m['goals']['away']} {m['teams']['away']['name']}"
+            for m in r.get("response", [])[:3]
+        ]
         if matchs:
           infos.append("Derniers scores L1 : " + ", ".join(matchs))
       except Exception:
@@ -169,23 +174,24 @@ class JoueurFM:
     contexte_reel = self.lire_actualite_foot()
     bloc_coach = (
         f"CONSEIL OU INFO DU COACH À ÉVALUER (INFO OU INTOX ?) : « {self.info_mentor} ». "
-        "RÈGLE ABSOLUE : Ne te fie JAMAIS à tes vieux souvenirs pour les transferts ou résultats ! "
-        "Base-toi UNIQUEMENT sur les PREUVES WEB EN DIRECT ci-dessus : si les titres d'actualité confirment les mots du Coach (même un transfert récent), mets 'info_vraie' !"
+        "RÈGLE ABSOLUE : Base-toi UNIQUEMENT sur les PREUVES WEB ci-dessus pour juger si l'info du Coach est vraie ou fausse !"
         if self.info_mentor
         else "Aucun nouveau message du Coach."
-        )
-    
+    )
 
     prompt = (
         f"Tu es {self.nom}, jeune espoir de {self.age} ans ({self.categorie}) au poste de {self.poste}. "
         f"Tes notes FM (/20) : Technique {self.technique:.1f}, Mental {self.mental:.1f}, Physique {self.physique:.1f}. "
         f"Condition : {self.condition}%, Moral : {self.moral}, Esprit Critique : {self.esprit_critique}. "
-        f"Ton atelier de la semaine : {self.atelier}. Tes modèles pros : {', '.join(self.modeles)}. "
+        f"Ton atelier : {self.atelier}. TON ÉQUIPE MODÈLE DE 5 JOUEURS (façon Sorare) : {self.equipe_5}. "
         f"DONNÉES RÉELLES DU FOOTBALL : {contexte_reel}. {bloc_coach} "
-        "Réponds en JSON valide avec 5 clés : "
-        "'pensee' (tes impressions d'entraînement ou d'observation des pros en 1 phrase), "
-        "'progression' (choisis parmi : 'technique', 'mental', 'physique', 'repos'), "
-        "'intensite' (choisis entre 'normale' ou 'intense' - attention au risque de blessure si condition < 65% !), "
+        "Évalue les performances récentes des 5 joueurs de ton équipe modèle sur une note moyenne /10 (ex: 7.4). "
+        "Réponds en JSON valide avec 7 clés : "
+        "'pensee' (tes impressions en 1 phrase), "
+        "'progression' (parmi : 'technique', 'mental', 'physique', 'repos'), "
+        "'intensite' (entre 'normale' ou 'intense'), "
+        "'note_equipe_5' (un nombre décimal entre 4.0 et 9.5 représentant la note moyenne de tes 5 joueurs modèles selon l'actu récente), "
+        "'bilan_equipe_5' (court résumé en 1 phrase des performances des 5 joueurs), "
         "'verdict_coach' (parmi : 'aucun', 'info_vraie', 'intox_demasquee', 'intox_crue'), "
         "et 'reponse_coach' (ta réponse naturelle à ton entraîneur)."
     )
@@ -203,7 +209,7 @@ class JoueurFM:
           GEMINI_API_KEY,
       ]).strip()
       try:
-        r = requests.post(url, json=payload, timeout=15)
+        r = requests.post(url, json=payload, timeout=18)
         if r.status_code == 503:
           continue
         if r.status_code != 200:
@@ -219,18 +225,32 @@ class JoueurFM:
         intensite = dec.get("intensite", "normale")
         verdict = dec.get("verdict_coach", "aucun")
         rep = dec.get("reponse_coach", "")
+        note_5 = float(dec.get("note_equipe_5", 6.8))
+        resume_5 = dec.get("bilan_equipe_5", "")
+
+        # Bonus Sorare selon la note moyenne des 5 joueurs choisis
+        if note_5 >= 7.5:
+          xp_sorare, bonus_note = 25, 0.15
+        elif note_5 >= 6.5:
+          xp_sorare, bonus_note = 15, 0.08
+        else:
+          xp_sorare, bonus_note = 5, 0.0
+
+        self.xp += xp_sorare
+        self.bilan_equipe = f"⭐ Note Line-Up : {note_5:.1f}/10 (+{xp_sorare} XP) • {resume_5}"
 
         coef = 1.0
         if self.info_mentor:
           if verdict == "info_vraie":
             self.xp += 20
             self.esprit_critique += 1
-            self.reponse_mentor = f"✅ [INFO VÉRIFIÉE • +20 XP] {rep}"
+            self.mental = min(20.0, self.mental + 0.1)
+            self.reponse_mentor = f"✅ [INFO VÉRIFIÉE • +20 XP & +0.1 Mental] {rep}"
           elif verdict == "intox_demasquee":
             self.xp += 25
             self.esprit_critique += 3
             self.mental = min(20.0, self.mental + 0.2)
-            self.reponse_mentor = f"🕵️ [INTOX DÉMASQUÉE • +0.2 Mental] {rep}"
+            self.reponse_mentor = f"🕵️ [INTOX DÉMASQUÉE • +25 XP & +0.2 Mental] {rep}"
           elif verdict == "intox_crue":
             coef = 0.5
             self.condition = max(20, self.condition - 15)
@@ -243,17 +263,23 @@ class JoueurFM:
         if prog == "repos" or self.atelier == "Repos & Soins":
           self.condition = min(100, self.condition + 20)
           self.moral = "Frais & Dispo"
-          self.dernier_evenement = "💆 Séance de récupération (+20% Condition)"
+          self.dernier_evenement = (
+              f"💆 Récupération (+20% Condition) | Line-up {note_5:.1f}/10"
+          )
         else:
           fatigue = 14 if intensite == "intense" else 7
           self.condition = max(10, self.condition - fatigue)
-          gain = (0.25 if intensite == "intense" else 0.15) * coef
+          gain = (
+              (0.20 if intensite == "intense" else 0.12) + bonus_note
+          ) * coef
 
           if self.condition < 45 and intensite == "intense":
             self.condition = 30
             self.moral = "Blessé (Élongation)"
             self.physique = max(1.0, self.physique - 0.3)
-            self.dernier_evenement = "🚑 BLESSURE À L'ENTRAÎNEMENT (Surmenage ! -0.3 Physique)"
+            self.dernier_evenement = (
+                "🚑 BLESSURE À L'ENTRAÎNEMENT (Surmenage ! -0.3 Physique)"
+            )
           else:
             if prog == "technique":
               self.technique = min(20.0, self.technique + gain)
@@ -261,9 +287,12 @@ class JoueurFM:
               self.mental = min(20.0, self.mental + gain)
             else:
               self.physique = min(20.0, self.physique + gain)
-            self.xp += int(15 * coef)
+            self.xp += int(10 * coef)
             self.moral = "En progrès"
-            self.dernier_evenement = f"⚽ Atelier {prog.upper()} (+{gain:.2f} pts)"
+            self.dernier_evenement = (
+                f"⚽ Atelier {prog.upper()} (+{gain:.2f} pts) | Line-up"
+                f" {note_5:.1f}/10"
+            )
 
         while self.xp >= 100:
           self.xp -= 100
@@ -274,7 +303,10 @@ class JoueurFM:
             self.categorie = "Réserve Pro (N2)"
           elif self.age >= 20:
             self.categorie = "🏟️ Groupe Pro (Ligue 1)"
-          self.dernier_evenement = f"🎂 ANNIVERSAIRE : {self.age} ans • Promotion en {self.categorie} !"
+          self.dernier_evenement = (
+              f"🎂 ANNIVERSAIRE : {self.age} ans • Promotion en"
+              f" {self.categorie} !"
+          )
 
         self.sauvegarder()
         break
@@ -284,6 +316,8 @@ class JoueurFM:
 
 
 joueur = JoueurFM()
+
+
 def boucle_centre_formation():
   while True:
     joueur.cycle_evolution()
@@ -293,6 +327,24 @@ def boucle_centre_formation():
 @app.route("/ping")
 def ping():
   return "OK", 200
+
+
+@app.route("/equipe", methods=["POST"])
+def maj_equipe():
+  j1 = request.form.get("j1", "").strip()
+  j2 = request.form.get("j2", "").strip()
+  j3 = request.form.get("j3", "").strip()
+  j4 = request.form.get("j4", "").strip()
+  j5 = request.form.get("j5", "").strip()
+  liste = [x for x in [j1, j2, j3, j4, j5] if x]
+  if liste:
+    joueur.equipe_5 = ", ".join(liste)
+    joueur.bilan_equipe = (
+        "⏳ Évaluation des performances des 5 joueurs en cours..."
+    )
+    joueur.sauvegarder()
+    threading.Thread(target=joueur.cycle_evolution, daemon=True).start()
+  return redirect("/")
 
 
 @app.route("/coach", methods=["POST"])
@@ -312,10 +364,22 @@ def action_coach():
 
 @app.route("/")
 def accueil():
+  from itertools import islice
+
   c_cond = (
       "#22c55e"
       if joueur.condition >= 70
       else ("#f59e0b" if joueur.condition >= 45 else "#ef4444")
+  )
+  j_actuels = [x.strip() for x in joueur.equipe_5.split(",")]
+  while len(j_actuels) < 5:
+    j_actuels.append("")
+  g1, d1, m1, m2, a1 = (
+      next(islice(j_actuels, 0, 1)),
+      next(islice(j_actuels, 1, 2)),
+      next(islice(j_actuels, 2, 3)),
+      next(islice(j_actuels, 3, 4)),
+      next(islice(j_actuels, 4, 5)),
   )
   return f"""<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="60"><title>Footix Academy FM</title></head>
   <body style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:18px; max-width:500px; margin:auto;">
@@ -329,11 +393,28 @@ def accueil():
       <p style="margin:4px 0;">🎯 <b>Technique :</b> {joueur.technique:.2f} / 20</p>
       <p style="margin:4px 0;">🧠 <b>Mental :</b> {joueur.mental:.2f} / 20</p>
       <p style="margin:4px 0;">⚡ <b>Physique :</b> {joueur.physique:.2f} / 20</p>
-      <p style="margin:4px 0;">🔋 Condition : <b style="color:{c_cond};">{joueur.condition}%</b> | 😊 Moral : <b>{joueur.moral}</b></p>
-      <p style="margin:4px 0;">🕵️ Esprit Critique : <b>{joueur.esprit_critique}</b> | Modèles : {', '.join(joueur.modeles)}</p>
+      <p style="margin:4px 0;">🔋 Condition : <b style="color:{c_cond};">{joueur.condition}%</b> | 😊 Moral : <b>{joueur.moral}</b> | 🕵️ Esprit Critique : <b>{joueur.esprit_critique}</b></p>
     </div>
-    <p>💬 <b>Pensée du joueur :</b> « {joueur.pensee} »</p>
+    <p>💬 <b>Pensée :</b> « {joueur.pensee} »</p>
     <p>📌 <b>Dernier fait :</b> {joueur.dernier_evenement}</p>
+
+    <div style="background:#1e293b; border:1px solid #f59e0b; padding:12px; margin-top:14px; border-radius:8px;">
+      <p style="margin:0 0 6px 0; color:#fbbf24; font-weight:bold;">🏟️ LINE-UP SORARE DU WEEK-END (5 JOUEURS)</p>
+      <p style="margin:0 0 8px 0; font-size:0.88em; color:#fef3c7;">{joueur.bilan_equipe}</p>
+      <form action="/equipe" method="POST" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex; gap:4px;">
+          <input type="text" name="j1" value="{g1}" placeholder="Gardien" style="width:50%; padding:6px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#fff;">
+          <input type="text" name="j2" value="{d1}" placeholder="Défenseur" style="width:50%; padding:6px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#fff;">
+        </div>
+        <div style="display:flex; gap:4px;">
+          <input type="text" name="j3" value="{m1}" placeholder="Milieu 1" style="width:33%; padding:6px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#fff;">
+          <input type="text" name="j4" value="{m2}" placeholder="Milieu 2" style="width:33%; padding:6px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#fff;">
+          <input type="text" name="j5" value="{a1}" placeholder="Attaquant" style="width:34%; padding:6px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#fff;">
+        </div>
+        <button type="submit" style="padding:7px; background:#f59e0b; color:#0f172a; border:none; border-radius:4px; font-weight:bold;">Valider ma Line-Up de 5 joueurs</button>
+      </form>
+    </div>
+
     <div style="background:#1e293b; border:1px solid #0284c7; padding:12px; margin-top:14px; border-radius:8px;">
       <p style="margin:0 0 6px 0; color:#38bdf8; font-weight:bold;">👔 BUREAU DU COACH (INFO OU INTOX)</p>
       <p style="margin:0 0 10px 0; font-size:0.9em; background:#0f172a; padding:8px; border-radius:4px;">🗣️ <b>{joueur.nom} :</b> « {joueur.reponse_mentor} »</p>
@@ -357,7 +438,4 @@ def accueil():
 if __name__ == "__main__":
   threading.Thread(target=boucle_centre_formation, daemon=True).start()
   app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-  
-
-
-
+    
