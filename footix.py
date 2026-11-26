@@ -157,6 +157,7 @@ class JoueurFM:
         headers = {"x-apisports-key": FOOTBALL_API_KEY}
         r = requests.get(
             "https://api-sports.io",
+
             headers=headers,
             timeout=8,
         ).json()
@@ -178,6 +179,7 @@ def gerer_cote_et_match(self):
         headers = {"x-apisports-key": FOOTBALL_API_KEY}
         r = requests.get(
             "https://api-sports.io",
+          
             headers=headers,
             timeout=8,
         ).json()
