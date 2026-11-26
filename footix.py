@@ -284,7 +284,7 @@ def cycle_evolution(self):
         else "Aucun nouveau message du Coach."
     )
 
-  prompt = (
+   prompt = (
         f"Tu es {self.nom}, jeune espoir de {self.age} ans ({self.categorie}) au poste de {self.poste}. "
         f"Tes notes FM (/20) : Technique {self.technique:.1f}, Mental {self.mental:.1f}, Physique {self.physique:.1f}. "
         f"Condition : {self.condition}%, Moral : {self.moral}, Esprit Critique : {self.esprit_critique}. "
