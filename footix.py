@@ -169,7 +169,7 @@ class JoueurFM:
       except Exception:
         pass
     return " | ".join(infos) if infos else "Semaine d'entraînement classique."
- def gerer_cote_et_match(self):
+def gerer_cote_et_match(self):
     if not GEMINI_API_KEY:
       return
     en_cours = [p for p in self.predictions if p.get("statut") == "⏳ En cours"]
